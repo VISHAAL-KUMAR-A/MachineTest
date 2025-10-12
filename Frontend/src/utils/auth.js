@@ -1,0 +1,44 @@
+/**
+ * Authentication utility functions
+ */
+
+/**
+ * Check if user is authenticated
+ * @returns {boolean}
+ */
+export const isAuthenticated = () => {
+  const token = localStorage.getItem('token');
+  return !!token;
+};
+
+/**
+ * Get current user from localStorage
+ * @returns {Object|null}
+ */
+export const getCurrentUser = () => {
+  const user = localStorage.getItem('user');
+  return user ? JSON.parse(user) : null;
+};
+
+/**
+ * Save user and token to localStorage
+ * @param {Object} userData
+ */
+export const saveUserData = (userData) => {
+  localStorage.setItem('token', userData.token);
+  localStorage.setItem('user', JSON.stringify({
+    _id: userData._id,
+    email: userData.email,
+    role: userData.role
+  }));
+};
+
+/**
+ * Clear user data and logout
+ */
+export const logout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
+};
+
