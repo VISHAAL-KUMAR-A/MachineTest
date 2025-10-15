@@ -24,12 +24,23 @@ const listSchema = new mongoose.Schema({
   agent: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Agent',
-    required: true
+    required: function() {
+      return !this.subAgent;
+    }
+  },
+  subAgent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'SubAgent'
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    refPath: 'uploadedByModel',
     required: true
+  },
+  uploadedByModel: {
+    type: String,
+    required: true,
+    enum: ['User', 'Agent']
   },
   uploadBatch: {
     type: String,

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardList, Phone, User, Calendar, LogOut } from 'lucide-react';
+import { ClipboardList, Phone, User, Calendar, LogOut, Users, Upload, FileText } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
 import { getCurrentUser, logout } from '../utils/auth';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Agent Dashboard Component
@@ -14,12 +15,15 @@ const AgentDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalTasks: 0,
-    totalBatches: 0
+    totalBatches: 0,
+    totalSubAgents: 0
   });
   const currentUser = getCurrentUser();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchMyTasks();
+    fetchSubAgentsCount();
   }, []);
 
   const fetchMyTasks = async () => {
@@ -28,16 +32,31 @@ const AgentDashboard = () => {
       
       if (response.data.success) {
         setTasks(response.data.data);
-        setStats({
+        setStats(prev => ({
+          ...prev,
           totalTasks: response.data.count,
           totalBatches: response.data.data.length
-        });
+        }));
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
       toast.error('Failed to load tasks');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSubAgentsCount = async () => {
+    try {
+      const response = await api.get('/subagents');
+      if (response.data.success) {
+        setStats(prev => ({
+          ...prev,
+          totalSubAgents: response.data.count
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching sub-agents count:', error);
     }
   };
 
@@ -81,12 +100,63 @@ const AgentDashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              onClick={() => navigate('/agent/subagents')}
+              className="bg-dark-card border border-dark-border rounded-lg p-6 hover:bg-dark-hover transition-colors text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-600 rounded-lg">
+                  <Users size={32} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Manage Sub-Agents</p>
+                  <p className="text-dark-textMuted text-sm">Create and manage your sub-agents</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('/agent/upload')}
+              className="bg-dark-card border border-dark-border rounded-lg p-6 hover:bg-dark-hover transition-colors text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-orange-600 rounded-lg">
+                  <Upload size={32} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Upload Lists</p>
+                  <p className="text-dark-textMuted text-sm">Upload files for sub-agents</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('/agent/upload')}
+              className="bg-dark-card border border-dark-border rounded-lg p-6 hover:bg-dark-hover transition-colors text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-teal-600 rounded-lg">
+                  <FileText size={32} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">View Distributions</p>
+                  <p className="text-dark-textMuted text-sm">See how lists are distributed</p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-dark-card border border-dark-border rounded-lg p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-dark-textMuted text-sm mb-1">Total Tasks Assigned</p>
+                <p className="text-dark-textMuted text-sm mb-1">My Tasks Assigned</p>
                 <p className="text-3xl font-bold text-white">{stats.totalTasks}</p>
               </div>
               <div className="p-3 bg-blue-600 rounded-lg">
@@ -103,6 +173,18 @@ const AgentDashboard = () => {
               </div>
               <div className="p-3 bg-green-600 rounded-lg">
                 <Calendar size={32} className="text-white" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-dark-card border border-dark-border rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-dark-textMuted text-sm mb-1">My Sub-Agents</p>
+                <p className="text-3xl font-bold text-white">{stats.totalSubAgents}</p>
+              </div>
+              <div className="p-3 bg-purple-600 rounded-lg">
+                <Users size={32} className="text-white" />
               </div>
             </div>
           </div>

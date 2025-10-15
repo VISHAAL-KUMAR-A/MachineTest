@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import AgentDashboard from './pages/AgentDashboard';
 import Agents from './pages/Agents';
 import UploadLists from './pages/UploadLists';
+import SubAgents from './pages/SubAgents';
+import AgentUploadLists from './pages/AgentUploadLists';
 import PrivateRoute from './components/PrivateRoute';
 
 /**
@@ -50,6 +52,8 @@ function App() {
           
           {/* Agent Routes */}
           <Route path="/agent-dashboard" element={<PrivateRoute agentOnly><AgentDashboard /></PrivateRoute>} />
+          <Route path="/agent/subagents" element={<PrivateRoute agentOnly><SubAgents /></PrivateRoute>} />
+          <Route path="/agent/upload" element={<PrivateRoute agentOnly><AgentUploadLists /></PrivateRoute>} />
           
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

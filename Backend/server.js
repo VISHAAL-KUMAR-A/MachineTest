@@ -24,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/agents', require('./routes/agentRoutes'));
 app.use('/api/lists', require('./routes/listRoutes'));
+app.use('/api/subagents', require('./routes/subAgentRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

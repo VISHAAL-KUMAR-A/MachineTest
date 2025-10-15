@@ -7,7 +7,10 @@ const {
   uploadList,
   getLists,
   getUploadBatches,
-  getMyTasks
+  getMyTasks,
+  agentUploadList,
+  getMyUploads,
+  getMyUploadBatches
 } = require('../controllers/listController');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -57,6 +60,9 @@ router.get('/batches', protect, adminOnly, getUploadBatches);
 
 // Agent routes
 router.get('/my-tasks', protect, getMyTasks);
+router.post('/agent-upload', protect, upload.single('file'), agentUploadList);
+router.get('/my-uploads', protect, getMyUploads);
+router.get('/my-batches', protect, getMyUploadBatches);
 
 module.exports = router;
 

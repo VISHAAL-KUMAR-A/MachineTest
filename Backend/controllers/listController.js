@@ -1,5 +1,6 @@
 const List = require('../models/List');
 const Agent = require('../models/Agent');
+const SubAgent = require('../models/SubAgent');
 const csv = require('csv-parser');
 const xlsx = require('xlsx');
 const fs = require('fs');
@@ -74,7 +75,7 @@ const uploadList = async (req, res) => {
     }
 
     // Distribute records among agents
-    const distributedRecords = distributeRecords(records, agents, req.user._id);
+    const distributedRecords = distributeRecords(records, agents, req.user._id, 'User');
 
     // Save all records to database
     const savedRecords = await List.insertMany(distributedRecords);
@@ -311,7 +312,7 @@ const validateRecords = (records) => {
 };
 
 // Helper function to distribute records among agents
-const distributeRecords = (records, agents, uploadedBy) => {
+const distributeRecords = (records, agents, uploadedBy, uploadedByModel) => {
   const uploadBatch = Date.now().toString();
   const agentCount = agents.length;
   const recordsPerAgent = Math.floor(records.length / agentCount);
@@ -332,6 +333,7 @@ const distributeRecords = (records, agents, uploadedBy) => {
           notes: records[recordIndex].notes.trim(),
           agent: agents[i]._id,
           uploadedBy,
+          uploadedByModel,
           uploadBatch
         });
         recordIndex++;
@@ -375,10 +377,321 @@ const getDistributionSummary = async (uploadBatch) => {
   return summary;
 };
 
+/**
+ * Upload CSV/Excel file and distribute lists to sub-agents (Agent upload)
+ * @route POST /api/lists/agent-upload
+ * @access Private (Agent only)
+ */
+const agentUploadList = async (req, res) => {
+  try {
+    // This endpoint is for agents only
+    if (req.userType !== 'agent') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This endpoint is for agents only.'
+      });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload a file'
+      });
+    }
+
+    const filePath = req.file.path;
+    const fileExtension = path.extname(req.file.originalname).toLowerCase();
+
+    // Validate file type
+    if (!['.csv', '.xlsx', '.xls'].includes(fileExtension)) {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file format. Only CSV, XLSX, and XLS files are allowed'
+      });
+    }
+
+    let records = [];
+
+    // Parse CSV file
+    if (fileExtension === '.csv') {
+      records = await parseCSV(filePath);
+    } 
+    // Parse Excel file
+    else if (fileExtension === '.xlsx' || fileExtension === '.xls') {
+      records = await parseExcel(filePath);
+    }
+
+    // Validate records
+    if (records.length === 0) {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({
+        success: false,
+        message: 'File is empty or contains no valid records'
+      });
+    }
+
+    // Validate record structure
+    const validationError = validateRecords(records);
+    if (validationError) {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({
+        success: false,
+        message: validationError
+      });
+    }
+
+    // Get all active sub-agents for this agent
+    const subAgents = await SubAgent.find({ 
+      parentAgent: req.user._id, 
+      isActive: true 
+    }).select('_id');
+
+    if (subAgents.length === 0) {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({
+        success: false,
+        message: 'No active sub-agents found. Please create sub-agents first.'
+      });
+    }
+
+    // Distribute records among sub-agents
+    const distributedRecords = distributeRecordsToSubAgents(
+      records, 
+      subAgents, 
+      req.user._id
+    );
+
+    // Save all records to database
+    const savedRecords = await List.insertMany(distributedRecords);
+
+    // Delete uploaded file after processing
+    fs.unlinkSync(filePath);
+
+    // Get distribution summary
+    const distributionSummary = await getSubAgentDistributionSummary(
+      distributedRecords[0].uploadBatch
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'File uploaded and distributed successfully',
+      data: {
+        totalRecords: savedRecords.length,
+        subAgentsCount: subAgents.length,
+        distributionSummary
+      }
+    });
+  } catch (error) {
+    console.error('Agent upload error:', error);
+    console.error('Error stack:', error.stack);
+    // Clean up uploaded file in case of error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error while uploading file'
+    });
+  }
+};
+
+/**
+ * Get distributed lists to sub-agents for the logged-in agent
+ * @route GET /api/lists/my-uploads
+ * @access Private (Agent only)
+ */
+const getMyUploads = async (req, res) => {
+  try {
+    // This endpoint is for agents only
+    if (req.userType !== 'agent') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This endpoint is for agents only.'
+      });
+    }
+
+    const { uploadBatch } = req.query;
+    const agentId = req.user._id;
+
+    let query = { 
+      uploadedBy: agentId,
+      uploadedByModel: 'Agent'
+    };
+    if (uploadBatch) query.uploadBatch = uploadBatch;
+
+    const lists = await List.find(query)
+      .populate('subAgent', 'name email mobileNumber')
+      .populate('uploadedBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Group by sub-agent
+    const groupedBySubAgent = lists.reduce((acc, list) => {
+      const subAgentId = list.subAgent._id.toString();
+      if (!acc[subAgentId]) {
+        acc[subAgentId] = {
+          subAgent: list.subAgent,
+          lists: []
+        };
+      }
+      acc[subAgentId].lists.push({
+        _id: list._id,
+        firstName: list.firstName,
+        phone: list.phone,
+        notes: list.notes,
+        uploadBatch: list.uploadBatch,
+        createdAt: list.createdAt
+      });
+      return acc;
+    }, {});
+
+    res.json({
+      success: true,
+      count: lists.length,
+      data: Object.values(groupedBySubAgent)
+    });
+  } catch (error) {
+    console.error('Get my uploads error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching uploads'
+    });
+  }
+};
+
+/**
+ * Get unique upload batches for agent uploads
+ * @route GET /api/lists/my-batches
+ * @access Private (Agent only)
+ */
+const getMyUploadBatches = async (req, res) => {
+  try {
+    // This endpoint is for agents only
+    if (req.userType !== 'agent') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This endpoint is for agents only.'
+      });
+    }
+
+    const agentId = req.user._id;
+
+    const batches = await List.distinct('uploadBatch', { 
+      uploadedBy: agentId,
+      uploadedByModel: 'Agent'
+    });
+    
+    const batchDetails = await Promise.all(
+      batches.map(async (batch) => {
+        const count = await List.countDocuments({ 
+          uploadBatch: batch,
+          uploadedBy: agentId,
+          uploadedByModel: 'Agent'
+        });
+        const firstRecord = await List.findOne({ 
+          uploadBatch: batch,
+          uploadedBy: agentId,
+          uploadedByModel: 'Agent'
+        })
+          .populate('uploadedBy', 'name email')
+          .sort({ createdAt: 1 });
+        
+        return {
+          batchId: batch,
+          recordCount: count,
+          uploadedBy: firstRecord?.uploadedBy?.name || firstRecord?.uploadedBy?.email || 'Unknown',
+          uploadedAt: firstRecord?.createdAt
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: batchDetails.sort((a, b) => b.uploadedAt - a.uploadedAt)
+    });
+  } catch (error) {
+    console.error('Get my batches error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching batches'
+    });
+  }
+};
+
+// Helper function to distribute records among sub-agents
+const distributeRecordsToSubAgents = (records, subAgents, uploadedBy) => {
+  const uploadBatch = Date.now().toString();
+  const subAgentCount = subAgents.length;
+  const recordsPerSubAgent = Math.floor(records.length / subAgentCount);
+  const remainder = records.length % subAgentCount;
+
+  const distributedRecords = [];
+  let recordIndex = 0;
+
+  for (let i = 0; i < subAgentCount; i++) {
+    // Calculate how many records this sub-agent should get
+    const recordsForThisSubAgent = recordsPerSubAgent + (i < remainder ? 1 : 0);
+
+    for (let j = 0; j < recordsForThisSubAgent; j++) {
+      if (recordIndex < records.length) {
+        distributedRecords.push({
+          firstName: records[recordIndex].firstName.trim(),
+          phone: records[recordIndex].phone.trim(),
+          notes: records[recordIndex].notes.trim(),
+          subAgent: subAgents[i]._id,
+          uploadedBy,
+          uploadedByModel: 'Agent',
+          uploadBatch
+        });
+        recordIndex++;
+      }
+    }
+  }
+
+  return distributedRecords;
+};
+
+// Helper function to get distribution summary for sub-agents
+const getSubAgentDistributionSummary = async (uploadBatch) => {
+  const summary = await List.aggregate([
+    { $match: { uploadBatch } },
+    {
+      $group: {
+        _id: '$subAgent',
+        count: { $sum: 1 }
+      }
+    },
+    {
+      $lookup: {
+        from: 'subagents',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'subAgentInfo'
+      }
+    },
+    {
+      $unwind: '$subAgentInfo'
+    },
+    {
+      $project: {
+        subAgentName: '$subAgentInfo.name',
+        subAgentEmail: '$subAgentInfo.email',
+        recordCount: '$count'
+      }
+    }
+  ]);
+
+  return summary;
+};
+
 module.exports = {
   uploadList,
   getLists,
   getUploadBatches,
-  getMyTasks
+  getMyTasks,
+  agentUploadList,
+  getMyUploads,
+  getMyUploadBatches
 };
 
