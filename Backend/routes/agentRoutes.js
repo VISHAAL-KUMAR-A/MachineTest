@@ -7,21 +7,21 @@ const {
   updateAgent,
   deleteAgent
 } = require('../controllers/agentController');
-const { protect } = require('../middleware/auth');
+const { protect, adminOnly } = require('../middleware/auth');
 
 /**
  * Agent management routes
- * All routes are protected (require authentication)
+ * All routes are protected and admin-only
  */
 
 router.route('/')
-  .get(protect, getAgents)
-  .post(protect, createAgent);
+  .get(protect, adminOnly, getAgents)
+  .post(protect, adminOnly, createAgent);
 
 router.route('/:id')
-  .get(protect, getAgent)
-  .put(protect, updateAgent)
-  .delete(protect, deleteAgent);
+  .get(protect, adminOnly, getAgent)
+  .put(protect, adminOnly, updateAgent)
+  .delete(protect, adminOnly, deleteAgent);
 
 module.exports = router;
 

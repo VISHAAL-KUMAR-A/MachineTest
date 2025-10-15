@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import AgentDashboard from './pages/AgentDashboard';
 import Agents from './pages/Agents';
 import UploadLists from './pages/UploadLists';
 import PrivateRoute from './components/PrivateRoute';
@@ -42,9 +43,13 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/agents" element={<PrivateRoute><Agents /></PrivateRoute>} />
-          <Route path="/upload" element={<PrivateRoute><UploadLists /></PrivateRoute>} />
+          {/* Admin Routes */}
+          <Route path="/" element={<PrivateRoute adminOnly><Dashboard /></PrivateRoute>} />
+          <Route path="/agents" element={<PrivateRoute adminOnly><Agents /></PrivateRoute>} />
+          <Route path="/upload" element={<PrivateRoute adminOnly><UploadLists /></PrivateRoute>} />
+          
+          {/* Agent Routes */}
+          <Route path="/agent-dashboard" element={<PrivateRoute agentOnly><AgentDashboard /></PrivateRoute>} />
           
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -54,4 +59,5 @@ function App() {
 }
 
 export default App;
+
 

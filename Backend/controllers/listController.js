@@ -127,6 +127,7 @@ const getLists = async (req, res) => {
       .sort({ createdAt: -1 });
 
     // Group by agent
+    //Here we are reorganizing the existing data for the frontend to display it in a more readable format
     const groupedByAgent = lists.reduce((acc, list) => {
       const agentId = list.agent._id.toString();
       if (!acc[agentId]) {
@@ -194,6 +195,63 @@ const getUploadBatches = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching batches'
+    });
+  }
+};
+
+/**
+ * Get agent's assigned tasks (for agent dashboard)
+ * @route GET /api/lists/my-tasks
+ * @access Private (Agent only)
+ */
+const getMyTasks = async (req, res) => {
+  try {
+    // This endpoint is for agents only
+    if (req.userType !== 'agent') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This endpoint is for agents only.'
+      });
+    }
+
+    const agentId = req.user._id;
+
+    // Get all tasks assigned to this agent
+    const tasks = await List.find({ agent: agentId })
+      .populate('uploadedBy', 'email')
+      .sort({ createdAt: -1 });
+
+    // Group by upload batch for better organization
+    const groupedTasks = tasks.reduce((acc, task) => {
+      const batchId = task.uploadBatch;
+      if (!acc[batchId]) {
+        acc[batchId] = {
+          batchId,
+          uploadedBy: task.uploadedBy?.email || 'Unknown',
+          uploadedAt: task.createdAt,
+          tasks: []
+        };
+      }
+      acc[batchId].tasks.push({
+        _id: task._id,
+        firstName: task.firstName,
+        phone: task.phone,
+        notes: task.notes,
+        createdAt: task.createdAt
+      });
+      return acc;
+    }, {});
+
+    res.json({
+      success: true,
+      count: tasks.length,
+      data: Object.values(groupedTasks)
+    });
+  } catch (error) {
+    console.error('Get my tasks error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching tasks'
     });
   }
 };
@@ -320,6 +378,7 @@ const getDistributionSummary = async (uploadBatch) => {
 module.exports = {
   uploadList,
   getLists,
-  getUploadBatches
+  getUploadBatches,
+  getMyTasks
 };
 

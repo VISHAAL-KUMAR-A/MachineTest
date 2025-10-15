@@ -1,27 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Mail, Lock } from 'lucide-react';
+import { LogIn, Mail, Lock, UserCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
-import { saveUserData, isAuthenticated } from '../utils/auth';
+import { saveUserData, isAuthenticated, getCurrentUser } from '../utils/auth';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 /**
  * Login Page Component
- * Handles user authentication
+ * Handles user and agent authentication
  */
 const Login = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
+    role: 'admin' // default to admin
   });
   const [loading, setLoading] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated()) {
-      navigate('/');
+      const user = getCurrentUser();
+      if (user.role === 'admin') {
+        navigate('/');
+      } else if (user.role === 'agent') {
+        navigate('/agent-dashboard');
+      }
     }
   }, [navigate]);
 
@@ -49,7 +55,13 @@ const Login = () => {
       if (response.data.success) {
         saveUserData(response.data.data);
         toast.success('Login successful!');
-        navigate('/');
+        
+        // Redirect based on role
+        if (response.data.data.role === 'admin') {
+          navigate('/');
+        } else if (response.data.data.role === 'agent') {
+          navigate('/agent-dashboard');
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -70,12 +82,34 @@ const Login = () => {
             <LogIn size={32} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-dark-textMuted">Sign in to your admin account</p>
+          <p className="text-dark-textMuted">Sign in to your account</p>
         </div>
 
         {/* Login Form */}
         <div className="bg-dark-card rounded-lg border border-dark-border p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Role Selection */}
+            <div>
+              <label htmlFor="role" className="block text-sm font-medium mb-2">
+                Login As
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <UserCircle size={18} className="text-dark-textMuted" />
+                </div>
+                <select
+                  id="role"
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-white"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="agent">Agent</option>
+                </select>
+              </div>
+            </div>
+
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium mb-2">
@@ -92,7 +126,7 @@ const Login = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="w-full pl-10 pr-4 py-3 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-white"
-                  placeholder="admin@example.com"
+                  placeholder={formData.role === 'admin' ? 'admin@example.com' : 'agent@example.com'}
                   required
                 />
               </div>
@@ -141,11 +175,21 @@ const Login = () => {
           </form>
 
           {/* Note */}
-          <div className="mt-6 p-4 bg-dark-bg rounded-lg border border-dark-border">
-            <p className="text-sm text-dark-textMuted">
-              <strong className="text-white">Note:</strong> Use the /api/auth/register endpoint to create an admin account if you haven't already.
-            </p>
-          </div>
+          {formData.role === 'admin' && (
+            <div className="mt-6 p-4 bg-dark-bg rounded-lg border border-dark-border">
+              <p className="text-sm text-dark-textMuted">
+                <strong className="text-white">Note:</strong> Use the /api/auth/register endpoint to create an admin account if you haven't already.
+              </p>
+            </div>
+          )}
+          
+          {formData.role === 'agent' && (
+            <div className="mt-6 p-4 bg-dark-bg rounded-lg border border-dark-border">
+              <p className="text-sm text-dark-textMuted">
+                <strong className="text-white">Agent Login:</strong> Use the credentials provided by your administrator.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -153,4 +197,5 @@ const Login = () => {
 };
 
 export default Login;
+
 

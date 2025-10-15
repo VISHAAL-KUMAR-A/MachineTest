@@ -21,16 +21,41 @@ export const getCurrentUser = () => {
 };
 
 /**
+ * Check if current user is admin
+ * @returns {boolean}
+ */
+export const isAdmin = () => {
+  const user = getCurrentUser();
+  return user?.role === 'admin';
+};
+
+/**
+ * Check if current user is agent
+ * @returns {boolean}
+ */
+export const isAgent = () => {
+  const user = getCurrentUser();
+  return user?.role === 'agent';
+};
+
+/**
  * Save user and token to localStorage
  * @param {Object} userData
  */
 export const saveUserData = (userData) => {
   localStorage.setItem('token', userData.token);
-  localStorage.setItem('user', JSON.stringify({
+  const userInfo = {
     _id: userData._id,
     email: userData.email,
     role: userData.role
-  }));
+  };
+  
+  // Add name for agents
+  if (userData.role === 'agent' && userData.name) {
+    userInfo.name = userData.name;
+  }
+  
+  localStorage.setItem('user', JSON.stringify(userInfo));
 };
 
 /**

@@ -52,5 +52,12 @@ agentSchema.pre('save', async function(next) {
   next();
 });
 
+/**
+ * Method to compare entered password with hashed password
+ */
+agentSchema.methods.matchPassword = async function(enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
 module.exports = mongoose.model('Agent', agentSchema);
 

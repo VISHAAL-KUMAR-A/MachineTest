@@ -1,14 +1,15 @@
 const User = require('../models/User');
+const Agent = require('../models/Agent');
 const generateToken = require('../utils/generateToken');
 
 /**
- * Login user
+ * Login user or agent
  * @route POST /api/auth/login
  * @access Public
  */
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
     // Validate input
     if (!email || !password) {
@@ -18,19 +19,46 @@ const login = async (req, res) => {
       });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    let user;
+    let userRole;
+
+    // If role is specified, ONLY check that specific role
+    if (role === 'agent') {
+      user = await Agent.findOne({ email });
+      userRole = 'agent';
+    } else if (role === 'admin') {
+      user = await User.findOne({ email });
+      userRole = 'admin';
+    } else {
+      // If no role specified (backwards compatibility), check both
+      user = await User.findOne({ email });
+      if (user) {
+        userRole = 'admin';
+      } else {
+        user = await Agent.findOne({ email });
+        if (user) {
+          userRole = 'agent';
+        }
+      }
+    }
 
     // Check if user exists and password is correct
     if (user && (await user.matchPassword(password))) {
+      const responseData = {
+        _id: user._id,
+        email: user.email,
+        role: userRole,
+        token: generateToken(user._id, userRole)
+      };
+
+      // Add name for agents
+      if (userRole === 'agent') {
+        responseData.name = user.name;
+      }
+
       res.json({
         success: true,
-        data: {
-          _id: user._id,
-          email: user.email,
-          role: user.role,
-          token: generateToken(user._id)
-        },
+        data: responseData,
         message: 'Login successful'
       });
     } else {
@@ -89,7 +117,7 @@ const register = async (req, res) => {
           _id: user._id,
           email: user.email,
           role: user.role,
-          token: generateToken(user._id)
+          token: generateToken(user._id, user.role)
         },
         message: 'User registered successfully'
       });
@@ -110,11 +138,21 @@ const register = async (req, res) => {
  */
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const userData = {
+      _id: req.user._id,
+      email: req.user.email,
+      role: req.userType
+    };
+
+    // Add name for agents
+    if (req.userType === 'agent') {
+      userData.name = req.user.name;
+      userData.mobileNumber = req.user.mobileNumber;
+    }
     
     res.json({
       success: true,
-      data: user
+      data: userData
     });
   } catch (error) {
     console.error('Get profile error:', error);

@@ -1,9 +1,10 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Agent = require('../models/Agent');
 
 /**
  * Middleware to protect routes
- * Verifies JWT token and attaches user to request
+ * Verifies JWT token and attaches user/agent to request
  */
 const protect = async (req, res, next) => {
   let token;
@@ -20,8 +21,14 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Get user from token and attach to request (excluding password)
-      req.user = await User.findById(decoded.id).select('-password');
+      // Check if it's an admin or agent based on the role in the token
+      if (decoded.role === 'admin') {
+        req.user = await User.findById(decoded.id).select('-password');
+        req.userType = 'admin';
+      } else if (decoded.role === 'agent') {
+        req.user = await Agent.findById(decoded.id).select('-password');
+        req.userType = 'agent';
+      }
 
       if (!req.user) {
         return res.status(401).json({
@@ -48,5 +55,31 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+/**
+ * Middleware to restrict routes to admin only
+ */
+const adminOnly = async (req, res, next) => {
+  if (req.userType !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin only.'
+    });
+  }
+  next();
+};
+
+/**
+ * Middleware to restrict routes to agents only
+ */
+const agentOnly = async (req, res, next) => {
+  if (req.userType !== 'agent') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Agents only.'
+    });
+  }
+  next();
+};
+
+module.exports = { protect, adminOnly, agentOnly };
 

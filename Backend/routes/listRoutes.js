@@ -6,9 +6,10 @@ const fs = require('fs');
 const {
   uploadList,
   getLists,
-  getUploadBatches
+  getUploadBatches,
+  getMyTasks
 } = require('../controllers/listController');
-const { protect } = require('../middleware/auth');
+const { protect, adminOnly } = require('../middleware/auth');
 
 // Create uploads directory if it doesn't exist
 const uploadDir = path.join(__dirname, '../uploads');
@@ -49,9 +50,13 @@ const upload = multer({
  * All routes are protected (require authentication)
  */
 
-router.post('/upload', protect, upload.single('file'), uploadList);
-router.get('/', protect, getLists);
-router.get('/batches', protect, getUploadBatches);
+// Admin only routes
+router.post('/upload', protect, adminOnly, upload.single('file'), uploadList);
+router.get('/', protect, adminOnly, getLists);
+router.get('/batches', protect, adminOnly, getUploadBatches);
+
+// Agent routes
+router.get('/my-tasks', protect, getMyTasks);
 
 module.exports = router;
 
