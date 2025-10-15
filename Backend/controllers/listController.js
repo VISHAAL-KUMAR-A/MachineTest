@@ -67,27 +67,9 @@ const uploadList = async (req, res) => {
     const originalCount = records.length;
     console.log('📊 [ADMIN UPLOAD] Before deduplication:', originalCount, 'records');
     records = removeDuplicates(records);
-    let duplicatesRemoved = originalCount - records.length;
+    const duplicatesRemoved = originalCount - records.length;
     console.log('✅ [ADMIN UPLOAD] After file deduplication:', records.length, 'unique records');
     console.log('🗑️ [ADMIN UPLOAD] Duplicates within file removed:', duplicatesRemoved);
-
-    // Remove records that already exist in the database
-    const beforeDbCheck = records.length;
-    records = await removeDatabaseDuplicates(records);
-    const dbDuplicatesRemoved = beforeDbCheck - records.length;
-    duplicatesRemoved += dbDuplicatesRemoved;
-    console.log('✅ [ADMIN UPLOAD] After database check:', records.length, 'new unique records');
-    console.log('🗑️ [ADMIN UPLOAD] Duplicates in database removed:', dbDuplicatesRemoved);
-    console.log('📦 [ADMIN UPLOAD] Total duplicates removed:', duplicatesRemoved);
-
-    // Check if any records remain after deduplication
-    if (records.length === 0) {
-      fs.unlinkSync(filePath); // Delete uploaded file
-      return res.status(400).json({
-        success: false,
-        message: 'All records in the file already exist in the database. No new records to add.'
-      });
-    }
 
     // Get all active agents
     const agents = await Agent.find({ isActive: true }).select('_id');
@@ -552,27 +534,9 @@ const agentUploadList = async (req, res) => {
     const originalCount = records.length;
     console.log('📊 [AGENT UPLOAD] Before deduplication:', originalCount, 'records');
     records = removeDuplicates(records);
-    let duplicatesRemoved = originalCount - records.length;
+    const duplicatesRemoved = originalCount - records.length;
     console.log('✅ [AGENT UPLOAD] After file deduplication:', records.length, 'unique records');
     console.log('🗑️ [AGENT UPLOAD] Duplicates within file removed:', duplicatesRemoved);
-
-    // Remove records that already exist in the database
-    const beforeDbCheck = records.length;
-    records = await removeDatabaseDuplicates(records);
-    const dbDuplicatesRemoved = beforeDbCheck - records.length;
-    duplicatesRemoved += dbDuplicatesRemoved;
-    console.log('✅ [AGENT UPLOAD] After database check:', records.length, 'new unique records');
-    console.log('🗑️ [AGENT UPLOAD] Duplicates in database removed:', dbDuplicatesRemoved);
-    console.log('📦 [AGENT UPLOAD] Total duplicates removed:', duplicatesRemoved);
-
-    // Check if any records remain after deduplication
-    if (records.length === 0) {
-      fs.unlinkSync(filePath); // Delete uploaded file
-      return res.status(400).json({
-        success: false,
-        message: 'All records in the file already exist in the database. No new records to add.'
-      });
-    }
 
     // Get all active sub-agents for this agent
     const subAgents = await SubAgent.find({ 
