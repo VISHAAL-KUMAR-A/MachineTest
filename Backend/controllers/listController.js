@@ -118,7 +118,8 @@ const getLists = async (req, res) => {
   try {
     const { uploadBatch, agentId } = req.query;
 
-    let query = {};
+    // Admin can only see lists uploaded by admin (User model)
+    let query = { uploadedByModel: 'User' };
     if (uploadBatch) query.uploadBatch = uploadBatch;
     if (agentId) query.agent = agentId;
 
@@ -130,6 +131,9 @@ const getLists = async (req, res) => {
     // Group by agent
     //Here we are reorganizing the existing data for the frontend to display it in a more readable format
     const groupedByAgent = lists.reduce((acc, list) => {
+      // Skip if agent is not populated (shouldn't happen with the query filter, but just in case)
+      if (!list.agent) return acc;
+      
       const agentId = list.agent._id.toString();
       if (!acc[agentId]) {
         acc[agentId] = {
@@ -169,12 +173,19 @@ const getLists = async (req, res) => {
  */
 const getUploadBatches = async (req, res) => {
   try {
-    const batches = await List.distinct('uploadBatch');
+    // Admin can only see batches uploaded by admin (User model)
+    const batches = await List.distinct('uploadBatch', { uploadedByModel: 'User' });
     
     const batchDetails = await Promise.all(
       batches.map(async (batch) => {
-        const count = await List.countDocuments({ uploadBatch: batch });
-        const firstRecord = await List.findOne({ uploadBatch: batch })
+        const count = await List.countDocuments({ 
+          uploadBatch: batch,
+          uploadedByModel: 'User'
+        });
+        const firstRecord = await List.findOne({ 
+          uploadBatch: batch,
+          uploadedByModel: 'User'
+        })
           .populate('uploadedBy', 'email')
           .sort({ createdAt: 1 });
         

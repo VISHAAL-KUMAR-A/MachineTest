@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, User, Users } from 'lucide-react';
+import { Upload, FileText, User, Users, ArrowLeft } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Agent Upload Lists Component
@@ -16,6 +17,7 @@ const AgentUploadLists = () => {
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('');
   const [subAgentCount, setSubAgentCount] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchSubAgentsCount();
@@ -145,8 +147,17 @@ const AgentUploadLists = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white mb-2">Upload Lists for Sub-Agents</h1>
-          <p className="text-dark-textMuted">
+          <div className="flex items-center gap-4 mb-2">
+            <button
+              onClick={() => navigate('/agent-dashboard')}
+              className="p-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft size={20} className="text-white" />
+            </button>
+            <h1 className="text-2xl font-bold text-white">Upload Lists for Sub-Agents</h1>
+          </div>
+          <p className="text-dark-textMuted ml-14">
             Upload CSV/Excel files to distribute tasks among your sub-agents
           </p>
         </div>
