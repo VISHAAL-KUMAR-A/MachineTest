@@ -10,7 +10,8 @@ const {
   getMyTasks,
   agentUploadList,
   getMyUploads,
-  getMyUploadBatches
+  getMyUploadBatches,
+  removeDuplicatesFromDatabase
 } = require('../controllers/listController');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -57,6 +58,7 @@ const upload = multer({
 router.post('/upload', protect, adminOnly, upload.single('file'), uploadList);
 router.get('/', protect, adminOnly, getLists);
 router.get('/batches', protect, adminOnly, getUploadBatches);
+router.delete('/remove-duplicates', protect, adminOnly, removeDuplicatesFromDatabase);
 
 // Agent routes
 router.get('/my-tasks', protect, getMyTasks);

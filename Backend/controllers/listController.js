@@ -63,6 +63,32 @@ const uploadList = async (req, res) => {
       });
     }
 
+    // Remove duplicate records within the file
+    const originalCount = records.length;
+    console.log('📊 [ADMIN UPLOAD] Before deduplication:', originalCount, 'records');
+    records = removeDuplicates(records);
+    let duplicatesRemoved = originalCount - records.length;
+    console.log('✅ [ADMIN UPLOAD] After file deduplication:', records.length, 'unique records');
+    console.log('🗑️ [ADMIN UPLOAD] Duplicates within file removed:', duplicatesRemoved);
+
+    // Remove records that already exist in the database
+    const beforeDbCheck = records.length;
+    records = await removeDatabaseDuplicates(records);
+    const dbDuplicatesRemoved = beforeDbCheck - records.length;
+    duplicatesRemoved += dbDuplicatesRemoved;
+    console.log('✅ [ADMIN UPLOAD] After database check:', records.length, 'new unique records');
+    console.log('🗑️ [ADMIN UPLOAD] Duplicates in database removed:', dbDuplicatesRemoved);
+    console.log('📦 [ADMIN UPLOAD] Total duplicates removed:', duplicatesRemoved);
+
+    // Check if any records remain after deduplication
+    if (records.length === 0) {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({
+        success: false,
+        message: 'All records in the file already exist in the database. No new records to add.'
+      });
+    }
+
     // Get all active agents
     const agents = await Agent.find({ isActive: true }).select('_id');
 
@@ -92,6 +118,7 @@ const uploadList = async (req, res) => {
       data: {
         totalRecords: savedRecords.length,
         agentsCount: agents.length,
+        duplicatesRemoved,
         distributionSummary
       }
     });
@@ -322,6 +349,74 @@ const validateRecords = (records) => {
   return null;
 };
 
+// Helper function to remove duplicate records
+const removeDuplicates = (records) => {
+  const uniqueRecords = [];
+  const seenFirstNames = new Set();
+  const seenPhones = new Set();
+  const seenNotes = new Set();
+
+  for (const record of records) {
+    // Normalize values for comparison (trim and lowercase)
+    const firstName = record.firstName.trim().toLowerCase();
+    const phone = record.phone.trim().toLowerCase();
+    const notes = record.notes.trim().toLowerCase();
+    
+    // Check if any of the fields have been seen before
+    const isDuplicate = 
+      seenFirstNames.has(firstName) || 
+      seenPhones.has(phone) || 
+      (notes && seenNotes.has(notes));
+    
+    if (!isDuplicate) {
+      // Add to unique records using original (non-lowercase) values
+      uniqueRecords.push(record);
+      
+      // Track seen values
+      seenFirstNames.add(firstName);
+      seenPhones.add(phone);
+      if (notes) {
+        seenNotes.add(notes);
+      }
+    }
+  }
+
+  return uniqueRecords;
+};
+
+// Helper function to remove records that already exist in the database
+const removeDatabaseDuplicates = async (records) => {
+  const uniqueRecords = [];
+
+  for (const record of records) {
+    // Normalize values for comparison
+    const firstName = record.firstName.trim();
+    const phone = record.phone.trim();
+    const notes = record.notes.trim();
+
+    // Escape special regex characters
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Check if any record exists in database with matching firstName, phone, or notes
+    const existingRecord = await List.findOne({
+      $or: [
+        { firstName: { $regex: new RegExp(`^${escapeRegex(firstName)}$`, 'i') } },
+        { phone: { $regex: new RegExp(`^${escapeRegex(phone)}$`, 'i') } },
+        ...(notes ? [{ notes: { $regex: new RegExp(`^${escapeRegex(notes)}$`, 'i') } }] : [])
+      ]
+    });
+
+    // Only add if no duplicate found in database
+    if (!existingRecord) {
+      uniqueRecords.push(record);
+    } else {
+      console.log(`⚠️ Skipping duplicate: ${firstName} (${phone}) - already exists in database`);
+    }
+  }
+
+  return uniqueRecords;
+};
+
 // Helper function to distribute records among agents
 const distributeRecords = (records, agents, uploadedBy, uploadedByModel) => {
   const uploadBatch = Date.now().toString();
@@ -453,6 +548,32 @@ const agentUploadList = async (req, res) => {
       });
     }
 
+    // Remove duplicate records within the file
+    const originalCount = records.length;
+    console.log('📊 [AGENT UPLOAD] Before deduplication:', originalCount, 'records');
+    records = removeDuplicates(records);
+    let duplicatesRemoved = originalCount - records.length;
+    console.log('✅ [AGENT UPLOAD] After file deduplication:', records.length, 'unique records');
+    console.log('🗑️ [AGENT UPLOAD] Duplicates within file removed:', duplicatesRemoved);
+
+    // Remove records that already exist in the database
+    const beforeDbCheck = records.length;
+    records = await removeDatabaseDuplicates(records);
+    const dbDuplicatesRemoved = beforeDbCheck - records.length;
+    duplicatesRemoved += dbDuplicatesRemoved;
+    console.log('✅ [AGENT UPLOAD] After database check:', records.length, 'new unique records');
+    console.log('🗑️ [AGENT UPLOAD] Duplicates in database removed:', dbDuplicatesRemoved);
+    console.log('📦 [AGENT UPLOAD] Total duplicates removed:', duplicatesRemoved);
+
+    // Check if any records remain after deduplication
+    if (records.length === 0) {
+      fs.unlinkSync(filePath); // Delete uploaded file
+      return res.status(400).json({
+        success: false,
+        message: 'All records in the file already exist in the database. No new records to add.'
+      });
+    }
+
     // Get all active sub-agents for this agent
     const subAgents = await SubAgent.find({ 
       parentAgent: req.user._id, 
@@ -491,6 +612,7 @@ const agentUploadList = async (req, res) => {
       data: {
         totalRecords: savedRecords.length,
         subAgentsCount: subAgents.length,
+        duplicatesRemoved,
         distributionSummary
       }
     });
@@ -696,6 +818,96 @@ const getSubAgentDistributionSummary = async (uploadBatch) => {
   return summary;
 };
 
+/**
+ * Remove duplicate records from database
+ * @route DELETE /api/lists/remove-duplicates
+ * @access Private (Admin only)
+ */
+const removeDuplicatesFromDatabase = async (req, res) => {
+  try {
+    // This endpoint is for admin only
+    if (req.userType !== 'user') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. This endpoint is for admin only.'
+      });
+    }
+
+    console.log('🧹 Starting database cleanup...');
+
+    // Get all lists from database
+    const allLists = await List.find({}).sort({ createdAt: 1 });
+    console.log(`📊 Total records in database: ${allLists.length}`);
+
+    const seenFirstNames = new Map();
+    const seenPhones = new Map();
+    const seenNotes = new Map();
+    const duplicateIds = [];
+
+    for (const list of allLists) {
+      const firstName = list.firstName.trim().toLowerCase();
+      const phone = list.phone.trim().toLowerCase();
+      const notes = list.notes.trim().toLowerCase();
+
+      let isDuplicate = false;
+
+      // Check firstName
+      if (seenFirstNames.has(firstName)) {
+        isDuplicate = true;
+        console.log(`❌ Duplicate firstName found: ${list.firstName} (ID: ${list._id})`);
+      }
+
+      // Check phone
+      if (seenPhones.has(phone)) {
+        isDuplicate = true;
+        console.log(`❌ Duplicate phone found: ${list.phone} (ID: ${list._id})`);
+      }
+
+      // Check notes
+      if (notes && seenNotes.has(notes)) {
+        isDuplicate = true;
+        console.log(`❌ Duplicate notes found: ${list.notes} (ID: ${list._id})`);
+      }
+
+      if (isDuplicate) {
+        duplicateIds.push(list._id);
+      } else {
+        // Track this record
+        seenFirstNames.set(firstName, list._id);
+        seenPhones.set(phone, list._id);
+        if (notes) {
+          seenNotes.set(notes, list._id);
+        }
+      }
+    }
+
+    // Delete all duplicate records
+    if (duplicateIds.length > 0) {
+      await List.deleteMany({ _id: { $in: duplicateIds } });
+      console.log(`✅ Removed ${duplicateIds.length} duplicate records`);
+    }
+
+    const remainingCount = await List.countDocuments();
+    console.log(`📊 Remaining unique records: ${remainingCount}`);
+
+    res.json({
+      success: true,
+      message: 'Database cleanup completed successfully',
+      data: {
+        totalRecords: allLists.length,
+        duplicatesRemoved: duplicateIds.length,
+        remainingRecords: remainingCount
+      }
+    });
+  } catch (error) {
+    console.error('Remove duplicates error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while removing duplicates'
+    });
+  }
+};
+
 module.exports = {
   uploadList,
   getLists,
@@ -703,6 +915,7 @@ module.exports = {
   getMyTasks,
   agentUploadList,
   getMyUploads,
-  getMyUploadBatches
+  getMyUploadBatches,
+  removeDuplicatesFromDatabase
 };
 

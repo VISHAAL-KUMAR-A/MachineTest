@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Download, User } from 'lucide-react';
+import { Upload, FileText, User } from 'lucide-react';
 import Layout from '../components/Layout';
 import LoadingSpinner from '../components/LoadingSpinner';
 import api from '../utils/api';
@@ -102,7 +102,14 @@ const UploadLists = () => {
       });
 
       if (response.data.success) {
-        toast.success(response.data.message);
+        const { duplicatesRemoved } = response.data.data;
+        
+        let message = response.data.message;
+        if (duplicatesRemoved > 0) {
+          message += ` (${duplicatesRemoved} duplicate${duplicatesRemoved > 1 ? 's' : ''} removed)`;
+        }
+        
+        toast.success(message);
         setSelectedFile(null);
         // Reset file input
         document.getElementById('fileInput').value = '';
@@ -175,6 +182,9 @@ const UploadLists = () => {
           </p>
           <p className="text-sm text-dark-textMuted mt-1">
             Lists will be distributed equally among all active agents.
+          </p>
+          <p className="text-sm text-dark-textMuted mt-1">
+            <strong className="text-white">Note:</strong> Duplicate entries (based on FirstName, Phone, or Notes) will be automatically removed before distribution.
           </p>
         </div>
       </div>
