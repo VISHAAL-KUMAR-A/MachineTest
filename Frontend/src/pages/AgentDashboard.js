@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardList, Phone, User, Calendar, LogOut, Users, Upload, FileText } from 'lucide-react';
+import { ClipboardList, Phone, User, Calendar, LogOut, Users, Upload } from 'lucide-react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
@@ -134,20 +134,6 @@ const AgentDashboard = () => {
               </div>
             </button>
 
-            <button
-              onClick={() => navigate('/agent/upload')}
-              className="bg-dark-card border border-dark-border rounded-lg p-6 hover:bg-dark-hover transition-colors text-left"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-teal-600 rounded-lg">
-                  <FileText size={32} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold">View Distributions</p>
-                  <p className="text-dark-textMuted text-sm">See how lists are distributed</p>
-                </div>
-              </div>
-            </button>
           </div>
         </div>
 
